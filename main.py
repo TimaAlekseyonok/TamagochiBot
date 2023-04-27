@@ -9,8 +9,8 @@ from life import feed_pet, walk_pet, wash_pet, check_heel, illness_pet
 
 
 
-bot = telebot.TeleBot('6202651990:AAEsQjIPBDqsMOx5wMjdFYEH44kMumWFMsU')
-create_connection_factory('D:/00-IT-00/TelegramBot/mydatabase.db')
+bot = telebot.TeleBot('Token')
+create_connection_factory('Path')
 
 
 @bot.message_handler(commands=['on'])
