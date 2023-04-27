@@ -2,15 +2,22 @@ import schedule
 import time
 import datetime
 import telebot
-import threading
 from telebot import types
-from dict_id_chats import user_dict
-from info_pets import info_dog, info_cat, info_panda, food_meet, food_green, food_all
-from pet import Pet
-from life import feed_pet, walk_pet, wash_pet, check_heel
+from info_pets import info_dog, info_cat, info_panda, food_meet, food_green, food_all, illness_heel
+from class_bd import create_connection_factory, get_connection
+from life import feed_pet, walk_pet, wash_pet, check_heel, illness_pet
+
 
 
 bot = telebot.TeleBot('6202651990:AAEsQjIPBDqsMOx5wMjdFYEH44kMumWFMsU')
+create_connection_factory('D:/00-IT-00/TelegramBot/mydatabase.db')
+
+
+@bot.message_handler(commands=['on'])
+def on(message):
+    bot.send_message(message.chat.id, 'Пошло!')
+    check_database()
+
 
 
 @bot.message_handler(commands=['start'])
@@ -21,7 +28,6 @@ def hello(message):
     panda = types.InlineKeyboardButton('🐼', callback_data='panda')
     tip_pitomca.add(dog, cat, panda)
     bot.send_message(message.chat.id, 'Привет, давай выберем твоего питомца!', reply_markup=tip_pitomca)
-
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'dog')
@@ -52,7 +58,6 @@ def panda(call):
     prove.add(button_prove, button_exit)
     bot.send_message(call.from_user.id, '🐼 Нгяньгь')
     bot.send_message(call.from_user.id, f'{info_panda}', reply_markup=prove)
-
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'exit')
@@ -88,56 +93,121 @@ def prove_panda(call):
 def named_pet(message):
     pet_name = message.text
     bot.send_message(message.chat.id, f'Отлично, {pet_name} - хорошее имя для {pet_tipe}!')
-    moy_pet = Pet(message.chat.id, pet_tipe, True, 10, 10, pet_name, False, False, False, time.time())
-    user_dict[message.chat.id] = moy_pet
-    print(user_dict)
-    if len(user_dict) == 1:
-        start_check()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"INSERT OR IGNORE INTO users (id) VALUES ({message.chat.id})")
+    cursor.execute(f"UPDATE users SET (tipe, life_status, life_status_message, last_hp, hp, name, need_food, need_food_message, need_walk, need_walk_message, need_wash, need_wash_message, time, illness, illness_message) = "
+                   f"('{pet_tipe}', True, False, 10, 10, '{pet_name}', False, False, False, False, False, False, {time.time()}, False, False) WHERE id = {message.chat.id}")
+    conn.commit()
+
+    cursor.execute('SELECT * FROM users')
+    rows = cursor.fetchall()
+    # Выводим полученные записи
+    for row in rows:
+        print(row)
+
 
 
 
 def check():
-    def check_potok(key, pet):
-        if pet.life_status['life_status'] == True and pet.life_status['message'] == False:
-            if pet.need_food['need_food'] == True and pet.need_food['message'] == False:
-                bot.send_message(key, f'Питомец голоден!')
-                pet.need_food['message'] = True
-            if pet.need_walk['need_walk'] == True and pet.need_walk['message'] == False:
-                bot.send_message(key, f'Питомец хочет на улицу!')
-                pet.need_walk['message'] = True
-            if pet.need_wash['need_wash'] == True and pet.need_wash['message'] == False:
-                bot.send_message(key, f'Питомца пора помыть!')
-                pet.need_wash['message'] = True
-        elif pet.life_status['life_status'] == False and pet.life_status['message'] == False:
-            time_diff = datetime.timedelta(seconds=time.time() - pet.time)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE life_status == True AND '
+                   'life_status_message == False AND '
+                   'need_food == True AND '
+                   'need_food_message == False')
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            bot.send_message(id, 'Питомец голоден!')
+            cursor.execute(f"UPDATE users SET need_food_message = True WHERE id = {id}")
+            conn.commit()
+
+
+    cursor.execute('SELECT * FROM users WHERE life_status == True AND '
+                   'life_status_message == False AND '
+                   'need_walk == True AND '
+                   'need_walk_message == False')
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            bot.send_message(id, 'Питомец хочет на улицу!')
+            cursor.execute(f"UPDATE users SET need_walk_message = True WHERE id = {id}")
+            conn.commit()
+
+
+    cursor.execute('SELECT * FROM users WHERE life_status == True AND '
+                   'life_status_message == False AND '
+                   'need_wash == True AND '
+                   'need_wash_message == False')
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            bot.send_message(id, 'Питомца пора помыть!')
+            cursor.execute(f"UPDATE users SET need_wash_message = True WHERE id = {id}")
+            conn.commit()
+
+    cursor.execute('SELECT * FROM users WHERE life_status == True AND '
+                   'life_status_message == False AND '
+                   'illness == True AND '
+                   'illness_message == False')
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            bot.send_message(id, 'Питомец заболел!')
+            cursor.execute(f"UPDATE users SET illness_message = True WHERE id = {id}")
+            conn.commit()
+
+
+    cursor.execute('SELECT * FROM users WHERE life_status == False AND '
+                   'life_status_message == False')
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            time = row[13]
+            time_diff = datetime.datetime.now() - datetime.datetime.fromtimestamp(time)
             days, seconds = time_diff.days, time_diff.seconds
             hours = seconds // 3600
             minutes = (seconds % 3600) // 60
             seconds = seconds % 60
-
             message_text = f"{days} дней, {hours} часов, {minutes} минут, {seconds} секунд"
-            bot.send_message(key, f'Ваш питомец погиб! Он был с вами так мало времени, но он останется в вашем сердце навсегда.\n'
-                                  f'Ваш питомец был с вами:\n'
-                                  f'{message_text}')
-            pet.life_status['message'] = True
+            bot.send_message(id, f'Ваш питомец погиб! Он был с вами так мало времени, но он останется в вашем сердце навсегда.\n'
+                             f'Ваш питомец был с вами:\n'
+                             f'{message_text}')
+            cursor.execute(f"UPDATE users SET life_status_message = True WHERE id = {id}")
+            conn.commit()
 
-    for key, pet in user_dict.items():
-        print(key)
-        potok = threading.Thread(target=check_potok, args=(key, pet,))
-        potok.start()
 
 
 schedule.every(5).minutes.do(check)
 schedule.every(61).minutes.do(feed_pet)
 schedule.every(92).minutes.do(walk_pet)
-schedule.every(119).minutes.do(wash_pet)
-schedule.every().day.at('10:00').do(check_heel)
+schedule.every(123).minutes.do(wash_pet)
+schedule.every(3).hours.do(check_heel)
+schedule.every(3).hours.do(illness_pet)
+# schedule.every().day.at('10:00').do(check_heel)
 
 
 def start_check():
     while 1:
         schedule.run_pending()
         time.sleep(1)
+
+
+def check_database():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT COUNT(*) FROM users")
+    result = cursor.fetchone()[0]
+    if result > 0:
+        start_check()
+    conn.close()
 
 
 
@@ -148,37 +218,54 @@ def info(message):
                                       f'2. /info - Выводит на экран информацию о вашем питомце')
 
 
-@bot.message_handler(commands=['keel'])
-def info(message):
-    if message.chat.id not in user_dict:
+@bot.message_handler(commands=['kill'])
+def kill(message):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM users WHERE id == {message.chat.id} AND "
+                   "life_status_message == False")
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            name = row[6]
+            bot.send_message(id, f'Вы бесчеловечно убили вашего питомца. Чем же {name} заслужил(ла) такого обращения? У вас нет ничего святого. Удалите, пожалуйста, этого бота и никогда сюда не возвращайтесь')
+            cursor.execute(f"UPDATE users SET (hp, life_status, life_status_message) = (0, False, True) WHERE id = {id}")
+            conn.commit()
+    else:
         bot.send_message(message.chat.id, 'Вы пока ещё не завели питомца( \n'
                                           'Давайте это исправим, жмите /start !')
-    else:
-        bot.send_message(message.chat.id, f'Вы бесчеловечно убили вашего питомца. Чем же {user_dict[message.chat.id].name} заслужил(ла) такого обращения? У вас нет ничего святого. Удалите, пожалуйста, этого бота и никогда сюда не возвращайтесь')
-        user_dict[message.chat.id].hp = 0
-        user_dict[message.chat.id].life_status['life_status'] = False
-        check()
 
 
 @bot.message_handler(commands=['info'])
 def info(message):
-    if message.chat.id not in user_dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM users WHERE id == {message.chat.id}")
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            tipe = row[1]
+            hp = row[5]
+            name = row[6]
+            time = row[13]
+            time_diff = datetime.datetime.now() - datetime.datetime.fromtimestamp(time)
+            days, seconds = time_diff.days, time_diff.seconds
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            seconds = seconds % 60
+            message_text = f"{days} дней, {hours} часов, {minutes} минут, {seconds} секунд"
+            bot.send_message(id, f'Ваш питомец - {tipe}\n'
+                                                      f'Имя вашего питомца - {name}\n'
+                                                      f'Здоровье вашего питомца - {hp} из 10!\n'
+                                                      f'Ваш питомец с вами уже:\n'
+                                                      f'{message_text}')
+            conn.commit()
+    else:
         bot.send_message(message.chat.id, 'Вы пока ещё не завели питомца( \n'
                                           'Давайте это исправим, жмите /start !')
-    else:
-        time_diff = datetime.timedelta(seconds=time.time() - user_dict[message.chat.id].time)
-        days, seconds = time_diff.days, time_diff.seconds
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
-        seconds = seconds % 60
 
-        message_text = f"{days} дней, {hours} часов, {minutes} минут, {seconds} секунд"
-
-        bot.send_message(message.chat.id, f'Ваш питомец - {user_dict[message.chat.id].tipe}\n'
-                                          f'Имя вашего питомца - {user_dict[message.chat.id].name}\n'
-                                          f'Здоровье вашего питомца - {user_dict[message.chat.id].hp} из 10!\n'
-                                          f'Ваш питомец с вами уже:\n'
-                                          f'{message_text}')
 
 
 @bot.message_handler()
@@ -186,39 +273,80 @@ def message(message):
     print(message)
     if message.text.lower() == 'привет':
         bot.send_message(message.chat.id, 'прив')
-        print('есть контакт')
+
     if message.text.lower() == 'гуляю':
-        user_dict[message.chat.id].got_walk()
-        bot.send_message(message.chat.id, 'питомец погулял')
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT * FROM users WHERE id == {message.chat.id}")
+        result = cursor.fetchall()
+        if result:
+            for row in result:
+                id = row[0]
+                bot.send_message(id, 'Питомец погулял')
+                cursor.execute(f"UPDATE users SET (need_walk, need_walk_message) = (False, False) WHERE id = {id}")
+                conn.commit()
+
     if message.text.lower() == 'мою':
-        user_dict[message.chat.id].got_wash()
-        bot.send_message(message.chat.id, 'питомец помыт')
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT * FROM users WHERE id == {message.chat.id}")
+        result = cursor.fetchall()
+        if result:
+            for row in result:
+                id = row[0]
+                bot.send_message(message.chat.id, 'Питомец помыт')
+                cursor.execute(f"UPDATE users SET (need_wash, need_wash_message) = (False, False) WHERE id = {id}")
+                conn.commit()
+
+    for i in message.text:
+        if i in illness_heel:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT * FROM users WHERE id == {message.chat.id}")
+            result = cursor.fetchall()
+            if result:
+                for row in result:
+                    id = row[0]
+                    bot.send_message(message.chat.id, 'Питомец здоров!')
+                    cursor.execute(f"UPDATE users SET (illness, illness_message) = (False, False) WHERE id = {id}")
+                    conn.commit()
 
     for i in message.text:
         if i in food_all:
-            if user_dict[message.chat.id].tipe == '🐶':
-                if i in food_meet:
-                    user_dict[message.chat.id].got_food()
-                    bot.send_message(message.chat.id, f'Питомец покормлен! {user_dict[message.chat.id].name} в восторге от {i}')
-                else:
-                    bot.send_message(message.chat.id, f'{i} - эта еда {user_dict[message.chat.id].name} не понравилась, не давайте больше такое вашему питомцу.')
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT * FROM users WHERE id == {message.chat.id}")
+            result = cursor.fetchall()
+            if result:
+                for row in result:
+                    id = row[0]
+                    tipe = row[1]
+                    name = row[6]
+                    if tipe == '🐶':
+                        if i in food_meet:
+                            cursor.execute(f"UPDATE users SET (need_food, need_food_message) = (False, False) WHERE id = {id}")
+                            conn.commit()
+                            bot.send_message(message.chat.id, f'Питомец покормлен! {name} в восторге от {i}')
+                        else:
+                            bot.send_message(message.chat.id, f'{i} - эта еда {name} не понравилась, не давайте больше такое вашему питомцу.')
 
-            if user_dict[message.chat.id].tipe == '🐱':
-                if i in food_meet:
-                    user_dict[message.chat.id].got_food()
-                    bot.send_message(message.chat.id, f'Питомец покормлен! {user_dict[message.chat.id].name} в восторге от {i}')
-                else:
-                    bot.send_message(message.chat.id, f'{i} - эта еда {user_dict[message.chat.id].name} не понравилась, не давайте больше такое вашему питомцу.')
+                    if tipe == '🐱':
+                        if i in food_meet:
+                            cursor.execute(f"UPDATE users SET (need_food, need_food_message) = (False, False) WHERE id = {id}")
+                            conn.commit()
+                            bot.send_message(message.chat.id, f'Питомец покормлен! {name} в восторге от {i}')
+                        else:
+                            bot.send_message(message.chat.id,
+                                             f'{i} - эта еда {name} не понравилась, не давайте больше такое вашему питомцу.')
 
-            if user_dict[message.chat.id].tipe == '🐼':
-                if i in food_green:
-                    user_dict[message.chat.id].got_food()
-                    bot.send_message(message.chat.id,
-                                     f'Питомец покормлен! {user_dict[message.chat.id].name} в восторге от {i}')
-                else:
-                    bot.send_message(message.chat.id,
-                                     f'{i} - эта еда {user_dict[message.chat.id].name} не понравилась, не давайте больше такое вашему питомцу.')
-
+                    if tipe == '🐼':
+                        if i in food_green:
+                            cursor.execute(f"UPDATE users SET (need_food, need_food_message) = (False, False) WHERE id = {id}")
+                            conn.commit()
+                            bot.send_message(message.chat.id, f'Питомец покормлен! {name} в восторге от {i}')
+                        else:
+                            bot.send_message(message.chat.id,
+                                             f'{i} - эта еда {name} не понравилась, не давайте больше такое вашему питомцу.')
 
 
 

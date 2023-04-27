@@ -1,75 +1,127 @@
 import time
 import threading
-from dict_id_chats import user_dict
 import telebot
-from telebot import types
+import random
+from class_bd import get_connection
 
 bot = telebot.TeleBot('6202651990:AAEsQjIPBDqsMOx5wMjdFYEH44kMumWFMsU')
 
-from pet import Pet
 
 
 def feed_pet():
-    def feed_potok(key, pet):
-        pet.food()
-        last_time_food = time.time()
-        while time.time() - last_time_food < 60*30:
-            time.sleep(1)
-        if pet.need_food['need_food'] and pet.life_status['life_status'] == True:
-            bot.send_message(key, "Вы не успели покормить питомца, он теряет 1 здоровье :(")
-            pet.got_food()
-            pet.damage()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET need_food = True")
+    conn.commit()
 
-    for key, pet in user_dict.items():
-        pet.food()
-        potok = threading.Thread(target=feed_potok, args=(key, pet,))
-        potok.start()
+    def feed_potok():
+        time.sleep(30 * 60)
+        cursor.execute("SELECT * FROM users WHERE need_food = True AND life_status = True")
+        result = cursor.fetchall()
+        for row in result:
+            id = row[0]
+            hp = row[5]
+            if hp > 1:
+                cursor.execute(f"UPDATE users SET need_food = False, need_food_message = False, hp = {hp - 1} WHERE id = {id}")
+            else:
+                cursor.execute(f"UPDATE users SET need_food = False, need_food_message = False, hp = {hp - 1}, life_status = False WHERE id = {id}")
+            bot.send_message(id, "Вы не успели покормить питомца, он теряет 1 здоровье :(")
+        conn.commit()
 
+    potok = threading.Thread(target=feed_potok)
+    potok.start()
 
 
 def walk_pet():
-    def walk_potok(key, pet):
-        pet.walk()
-        last_time_walk = time.time()
-        while time.time() - last_time_walk < 60*30:
-            time.sleep(1)
-        if pet.need_walk['need_walk'] and pet.life_status['life_status'] == True:
-            bot.send_message(key, "Вы не успели погулять с питомцем, он теряет 1 здоровье :(")
-            pet.got_walk()
-            pet.damage()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET need_walk = True")
+    conn.commit()
 
-    for key, pet in user_dict.items():
-        pet.walk()
-        potok = threading.Thread(target=walk_potok, args=(key, pet,))
-        potok.start()
+    def walk_potok():
+        time.sleep(30 * 60)
+        cursor.execute("SELECT * FROM users WHERE need_walk = True AND life_status = True")
+        result = cursor.fetchall()
+        for row in result:
+            id = row[0]
+            hp = row[5]
+            if hp > 1:
+                cursor.execute(f"UPDATE users SET need_walk = False, need_walk_message = False, hp = {hp - 1} WHERE id = {id}")
+            else:
+                cursor.execute(f"UPDATE users SET need_walk = False, need_walk_message = False, hp = {hp - 1}, life_status = False WHERE id = {id}")
+            bot.send_message(id, "Вы не успели погулять с питомцем, он теряет 1 здоровье :(")
+        conn.commit()
+
+    potok = threading.Thread(target=walk_potok)
+    potok.start()
 
 
 def wash_pet():
-    def wash_potok(key, pet):
-        pet.wash()
-        last_time_wash = time.time()
-        while time.time() - last_time_wash < 60*30:
-            time.sleep(1)
-        if pet.need_wash['need_wash'] and pet.life_status['life_status'] == True:
-            bot.send_message(key, "Вы не успели помыть питомца, он теряет 1 здоровье :(")
-            pet.got_wash()
-            pet.damage()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET need_wash = True")
+    conn.commit()
 
-    for key, pet in user_dict.items():
-        pet.wash()
-        potok = threading.Thread(target=wash_potok, args=(key, pet,))
-        potok.start()
+    def wash_potok():
+        time.sleep(30 * 60)
+        cursor.execute("SELECT * FROM users WHERE need_wash = True AND life_status = True")
+        result = cursor.fetchall()
+        for row in result:
+            id = row[0]
+            hp = row[5]
+            if hp > 1:
+                cursor.execute(f"UPDATE users SET need_wash = False, need_wash_message = False, hp = {hp - 1} WHERE id = {id}")
+            else:
+                cursor.execute(f"UPDATE users SET need_wash = False, need_wash_message = False, hp = {hp - 1}, life_status = False WHERE id = {id}")
+            bot.send_message(id, "Вы не успели погулять с питомцем, он теряет 1 здоровье :(")
+        conn.commit()
+
+    potok = threading.Thread(target=wash_potok)
+    potok.start()
+
 
 
 def check_heel():
-    for key, pet in user_dict.items():
-        if pet.hp < 10:
-            if pet.last_hp > pet.hp:
-                pet.last_hp = pet.hp
-            elif pet.last_hp == pet.hp:
-                pet.heel()
-                pet.last_hp = pet.hp
-                bot.send_message(key, 'Вы хорошо следили за питомцем, он чувствует себя замечательно и получает 1 здоровье')
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SELECT * FROM users")
+    result = cursor.fetchall()
+    if result:
+        for row in result:
+            id = row[0]
+            hp = row[5]
+            last_hp = row[4]
+            if hp < 10:
+                if last_hp > hp:
+                    cursor.execute(f"UPDATE users SET last_hp = {hp} WHERE id = {id}")
+                    conn.commit()
+                elif last_hp == hp:
+                    cursor.execute(f"UPDATE users SET (last_hp, hp) = ({hp + 1}, {hp + 1}) WHERE id = {id}")
+                    conn.commit()
+                    bot.send_message(id, 'Вы хорошо следили за питомцем, он чувствует себя замечательно и получает 1 здоровье')
 
 
 
+def illness_pet():
+    if random.random() <= 0.3:  # 30% случаев
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET illness = True")
+        conn.commit()
+
+        def illness_potok():
+            time.sleep(30 * 60)
+            cursor.execute("SELECT * FROM users WHERE illness = True AND life_status = True")
+            result = cursor.fetchall()
+            for row in result:
+                id = row[0]
+                hp = row[5]
+                if hp > 3:
+                    cursor.execute(f"UPDATE users SET illness = False, illness_message = False, hp = {hp - 3} WHERE id = {id}")
+                else:
+                    cursor.execute(f"UPDATE users SET illness = False, illness_message = False, hp = {hp - 3}, life_status = False WHERE id = {id}")
+                bot.send_message(id, "Вы не вылечили питомца, он теряет 3 здоровье :(")
+            conn.commit()
+
+        potok = threading.Thread(target=illness_potok)
+        potok.start()
